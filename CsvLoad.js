@@ -4,7 +4,7 @@ const { DataTypes, col } = require('sequelize');
 const DynamicModel = require('./models/DynamicModel');
 const sequelize = require('./config/database');
 
-const csvFilePath = 'C:\\Users\\SunilKumarMallah\\Desktop\\testFile.txt';
+const csvFilePath = 'organizations-100000.csv';
 const tableName = 'TestPDCEncum'; // Replace with the desired table name
 
 fs.createReadStream(csvFilePath)
@@ -23,9 +23,10 @@ fs.createReadStream(csvFilePath)
       sequelize,
       tableName,
       //modelName: 'DynamicModel',
-    });
+    })
 
     sequelize.sync({ force: true });
+
   })
   .on('data', (row) => DynamicModel.create(row))
-//.on('end', () => sequelize.close());
+  .on('end', () => sequelize.close());
