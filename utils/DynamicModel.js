@@ -18,6 +18,11 @@ function createHeaders(headers, tableName) {
         type: DataTypes.TEXT,
         allowNull: true, // Adjust as needed
     };
+    columnDefinitions['uniqueKey'] = {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        autoIncrement: true,
+    };
     DynamicModel.init(columnDefinitions, {
         sequelize,
         tableName,
