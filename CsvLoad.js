@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const csvParser = require('csv-parser');
+const ora = require('ora');
 const DynamicModel = require('./models/DynamicModel');
 const sequelize = require('./config/database');
 const { createHeaders } = require('./utils/DynamicModel.js');
@@ -18,12 +19,13 @@ let totalRows = 0;
 // Initialize line counter for row indexing
 const lineCounter = ((i = 0) => () => ++i)();
 
-console.log(`File Processing Started -> ${csvFileName}`);
+// Initialize the loader
+const spinner = ora(`File Processing Started -> ${csvFileName}`).info();
 console.time('Time Elapsed');
 
 (async () => {
   try {
-    // Read headers to create the database table structure
+    // Step 1: Read headers to create the database table structure
     const headerStream = fs.createReadStream(csvFilePath)
       .pipe(csvParser({ separator: delimiter }));
 
@@ -34,16 +36,17 @@ console.time('Time Elapsed');
 
     // Drop Table if exists
     if (dropTable) {
-      await DynamicModel.drop({ logging: console.log });
-      console.log(`${tableName} table dropped!`);
+      await DynamicModel.drop({ logging: (sql, time) => spinner.start(`Dropping the table ${tableName}! ${sql}`) });
+      spinner.succeed(`${tableName} table dropped!`);
     }
 
     // Sync the database
     await sequelize.sync({ force: true });
 
-    // Process the file in chunks
+    // Step 2: Process the file in chunks
     const stream = fs.createReadStream(csvFilePath)
       .pipe(csvParser({ separator: delimiter }));
+    spinner.start('Loading data...');
 
     for await (const row of stream) {
       row['lineNo'] = lineCounter();
@@ -54,19 +57,21 @@ console.time('Time Elapsed');
       if (rowsToInsert.length >= BATCH_SIZE) {
         // Insert the current batch into the database
         await DynamicModel.bulkCreate(rowsToInsert);
-        console.log(`Inserted ${rowsToInsert.length} rows.`);
         rowsToInsert = []; // Clear the batch
       }
+
+      // Update the loader message
+      spinner.text = `Loading data... Processed ${totalRows} rows so far.`;
     }
 
     // Insert remaining rows (if any)
     if (rowsToInsert.length > 0) {
       await DynamicModel.bulkCreate(rowsToInsert);
-      console.log(`Inserted ${rowsToInsert.length} remaining rows.`);
     }
 
-    console.log(`Total Rows Inserted: ${totalRows}`);
+    spinner.succeed(`Data loading complete. Total Rows Inserted: ${totalRows}`);
   } catch (error) {
+    spinner.fail('Error loading data.');
     console.error('Error processing file:', error.message);
   } finally {
     await sequelize.close();
